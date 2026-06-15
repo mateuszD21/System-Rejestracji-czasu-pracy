@@ -12,6 +12,7 @@ export default function PanelPracownika() {
     const [aktywnaZakladka, setAktywnaZakladka] = useState('czas');
     const [wybranyMiesiac, setWybranyMiesiac] = useState(null);
     const [rozwinietyDzien, setRozwinietyDzien] = useState(null);
+    const [naPrzerwie, setNaPrzerwie] = useState(false); // NOWY STAN DLA WSTRZYMANIA PRACY
 
     const pobierzDane = async () => {
         try {
@@ -20,6 +21,14 @@ export default function PanelPracownika() {
             if (response.data.miesiace.length > 0 && !wybranyMiesiac) {
                 const pierwszy = response.data.miesiace[0];
                 setWybranyMiesiac(`${pierwszy.rok}-${pierwszy.miesiac}`);
+            }
+
+            // Sprawdzamy, czy w pamięci przeglądarki mamy zapisaną przerwę
+            if (!response.data.aktywna_sesja && localStorage.getItem('status_pauzy') === 'true') {
+                setNaPrzerwie(true);
+            } else if (response.data.aktywna_sesja) {
+                setNaPrzerwie(false);
+                localStorage.removeItem('status_pauzy');
             }
         } catch (error) {
             console.error("Błąd pobierania danych", error);
@@ -33,6 +42,8 @@ export default function PanelPracownika() {
     const handleStart = async () => {
         try {
             await api.post('/czas/start');
+            setNaPrzerwie(false);
+            localStorage.removeItem('status_pauzy');
             pobierzDane();
         } catch (error) {
             alert(error.response?.data?.detail || "Błąd!");
@@ -42,9 +53,24 @@ export default function PanelPracownika() {
     const handleStop = async () => {
         try {
             await api.post('/czas/stop');
+            setNaPrzerwie(false);
+            localStorage.removeItem('status_pauzy');
             pobierzDane();
         } catch (error) {
             alert(error.response?.data?.detail || "Błąd!");
+        }
+    };
+
+    // FUNKCJA DLA PRZYCISKU WSTRZYMANIA PRACY (NOWA)
+    const handleWstrzymaj = async () => {
+        try {
+            await api.post('/czas/stop');
+            setNaPrzerwie(true);
+            localStorage.setItem('status_pauzy', 'true');
+            pobierzDane();
+            alert("Praca wstrzymana. Rozpoczęto przerwę.");
+        } catch (error) {
+            alert(error.response?.data?.detail || "Błąd wstrzymania pracy");
         }
     };
 
@@ -111,13 +137,43 @@ export default function PanelPracownika() {
                         Praca w toku od: {formatujDate(dane.aktywna_sesja.start_sesji)}
                     </div>
                 )}
+                
+                {/* NOWY STATUS WIZUALNY DLA PRZERWY */}
+                {!trwaSesja && naPrzerwie && (
+                    <div className="status-aktywna" style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
+                        ☕ Jesteś na przerwie (Praca wstrzymana)
+                    </div>
+                )}
 
+                {/* ZAKTUALIZOWANA SEKCJA PRZYCISKÓW AKCJI */}
                 <div className="actions">
-                    <button className="btn-start" onClick={handleStart} disabled={trwaSesja}>
-                        Rozpocznij pracę
+                    {/* Przycisk startuje pracę od zera lub wznawia ją po przerwie */}
+                    <button 
+                        className="btn-start" 
+                        onClick={handleStart} 
+                        disabled={trwaSesja}
+                        style={naPrzerwie ? { background: '#3b82f6' } : {}}
+                    >
+                        {naPrzerwie ? "▶ Wznów pracę" : "Rozpocznij pracę"}
                     </button>
-                    <button className="btn-stop" onClick={handleStop} disabled={!trwaSesja}>
-                        Zakończ pracę
+
+                    {/* Przycisk pauzy aktywuje się tylko, gdy sesja trwa */}
+                    <button 
+                        className="btn-stop" 
+                        onClick={handleWstrzymaj} 
+                        disabled={!trwaSesja}
+                        style={trwaSesja ? { background: '#eab308', color: 'black', marginRight: '10px' } : { marginRight: '10px' }}
+                    >
+                        ⏸ Wstrzymaj (Przerwa)
+                    </button>
+
+                    {/* Przycisk stopu zamyka ostatecznie sesję i dzień pracy */}
+                    <button 
+                        className="btn-stop" 
+                        onClick={handleStop} 
+                        disabled={!trwaSesja && !naPrzerwie}
+                    >
+                        Zakończ dzień pracy
                     </button>
                 </div>
 

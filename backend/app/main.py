@@ -293,3 +293,47 @@ def get_sesje_pracownika_admin(
         raise HTTPException(status_code=403, detail="Brak uprawnień administratora")
         
     return crud.pobierz_sesje_uzytkownika(db, uzytkownik_id)
+
+@app.get("/kierownik/raport-zbiorczy")
+def generuj_raport_zbiorczy(
+    rok: int,
+    miesiac: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.Uzytkownik = Depends(wymagaj_kierownika)
+):
+    if current_user.rola not in ("kierownik", "administrator"): # Zabezpieczenie ról
+        raise HTTPException(status_code=403, detail="Brak uprawnień kierownika")
+
+    pracownicy = crud.pobierz_pracownikow(db)
+    raport = []
+    
+    for pracownik in pracownicy:
+        # Pobieramy dni pracownika (Twoja funkcja wylicza je dla wszystkich sesji)
+        dni, _ = crud.oblicz_szczegoly_pracownika(db, pracownik)
+        
+        # Filtrujemy tylko te dni, które należą do wybranego roku i miesiąca
+        dni_w_miesiacu = [
+            d for d in dni 
+            if d["data"].year == rok and d["data"].month == miesiac
+        ]
+        
+        # Sumujemy wartości tylko dla tego jednego, wybranego miesiąca
+        total_normalne = sum(d["godziny_normalne"] for d in dni_w_miesiacu)
+        total_nadgodziny = sum(d["godziny_nadgodzin"] for d in dni_w_miesiacu)
+        total_godziny = sum(d["godziny_przepracowane"] for d in dni_w_miesiacu)
+        total_zarobek = sum(d["zarobek"] for d in dni_w_miesiacu)
+        
+        # Jeśli pracownik w danym miesiącu w ogóle nie pracował, możemy go pominąć 
+        # lub wpisać z zerowym stanem (zostawiamy zero, żeby kierownik widział pełną listę płac)
+        raport.append({
+            "pracownik_id": pracownik.id,
+            "imie": pracownik.imie,
+            "nazwisko": pracownik.nazwisko,
+            "email": pracownik.email,
+            "suma_godzin": round(total_godziny, 2),
+            "godziny_normalne": round(total_normalne, 2),
+            "godziny_nadgodzin": round(total_nadgodziny, 2),
+            "pensja_do_wyplaty": round(total_zarobek, 2)
+        })
+        
+    return raport
