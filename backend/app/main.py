@@ -8,6 +8,8 @@ from . import models, schemas, crud, database
 from .database import engine
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
+from fastapi import APIRouter, Depends, HTTPException
+
 
 models.Base.metadata.create_all(bind=engine)
 # Konfiguracja JWT
@@ -232,3 +234,62 @@ def aktualizuj_ustawienia_pracownika(
             zarobek_nadgodzin=dzien["zarobek_nadgodzin"],
         ) for dzien in dni],
     )
+
+# 1. Zablokowanie/Odblokowanie konta pracownika
+@app.put("/admin/uzytkownicy/{uzytkownik_id}/status", response_model=schemas.UzytkownikResponse)
+def zmien_status_uzytkownika(
+    uzytkownik_id: int, 
+    status: schemas.StatusKontaUpdate, 
+    db: Session = Depends(database.get_db),
+    current_admin: models.Uzytkownik = Depends(get_current_user)
+):
+    if current_admin.rola != "administrator":
+        raise HTTPException(status_code=403, detail="Brak uprawnień administratora")
+        
+    zaktualizowany = crud.zmien_status_konta(db, uzytkownik_id, status.aktywny)
+    if not zaktualizowany:
+        raise HTTPException(status_code=404, detail="Nie znaleziono użytkownika")
+    return zaktualizowany
+
+
+# 2. Ręczne dodanie brakującego wpisu z przeszłości
+@app.post("/admin/uzytkownicy/{uzytkownik_id}/sesje", response_model=schemas.SesjaPracyResponse)
+def dodaj_brakujaca_sesje(
+    uzytkownik_id: int, 
+    sesja: schemas.SesjaPracyManual, 
+    db: Session = Depends(database.get_db),
+    current_admin: models.Uzytkownik = Depends(get_current_user)
+):
+    if current_admin.rola != "administrator":
+        raise HTTPException(status_code=403, detail="Brak uprawnień administratora")
+        
+    return crud.dodaj_sesje_recznie(db, uzytkownik_id, sesja)
+
+
+# 3. Ręczna korekta (edycja) istniejącej sesji
+@app.put("/admin/sesje/{sesja_id}", response_model=schemas.SesjaPracyResponse)
+def popraw_bledna_sesje(
+    sesja_id: int, 
+    sesja: schemas.SesjaPracyManual, 
+    db: Session = Depends(database.get_db),
+    current_admin: models.Uzytkownik = Depends(get_current_user)
+):
+    if current_admin.rola != "administrator":
+        raise HTTPException(status_code=403, detail="Brak uprawnień administratora")
+        
+    zaktualizowana = crud.edytuj_sesje(db, sesja_id, sesja)
+    if not zaktualizowana:
+        raise HTTPException(status_code=404, detail="Nie znaleziono sesji")
+    return zaktualizowana
+
+# Pobranie wszystkich sesji konkretnego pracownika przez admina
+@app.get("/admin/uzytkownicy/{uzytkownik_id}/sesje", response_model=List[schemas.SesjaPracyResponse])
+def get_sesje_pracownika_admin(
+    uzytkownik_id: int,
+    db: Session = Depends(database.get_db),
+    current_admin: models.Uzytkownik = Depends(get_current_user)
+):
+    if current_admin.rola != "administrator":
+        raise HTTPException(status_code=403, detail="Brak uprawnień administratora")
+        
+    return crud.pobierz_sesje_uzytkownika(db, uzytkownik_id)

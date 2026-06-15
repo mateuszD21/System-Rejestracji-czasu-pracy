@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum
+from sqlalchemy import Boolean, Column, Integer, String, Float, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -18,6 +18,7 @@ class Uzytkownik(Base):
     email = Column(String, unique=True, index=True)
     haslo_hash = Column(String)
     rola = Column(Enum(RolaUzytkownika))
+    aktywny = Column(Boolean, default=True)
     
     # Pola finansowe i normy
     stawka_godzinowa = Column(Float)

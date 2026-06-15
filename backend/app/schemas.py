@@ -30,6 +30,7 @@ class UzytkownikResponse(BaseModel):
     nazwisko: str
     email: str
     rola: str
+    aktywny: bool
 
     class Config:
         from_attributes = True
@@ -98,3 +99,10 @@ class SzczegolyPracownikaResponse(BaseModel):
     stawka_nadgodzinowa: Optional[float] = None
     pensja_do_wyplaty: float
     dni: List[DzienPracyResponse]
+    
+class StatusKontaUpdate(BaseModel):
+    aktywny: bool
+
+class SesjaPracyManual(BaseModel):
+    start_sesji: datetime
+    koniec_sesji: Optional[datetime] = None

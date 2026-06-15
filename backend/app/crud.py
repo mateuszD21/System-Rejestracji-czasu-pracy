@@ -44,6 +44,9 @@ def autentykacja_uzytkownika(db: Session, dane_logowania: schemas.UzytkownikLogi
     # Używamy naszej nowej funkcji weryfikującej
     if not uzytkownik or not zweryfikuj_haslo(dane_logowania.haslo, uzytkownik.haslo_hash):
         return False
+    
+    if not uzytkownik.aktywny:
+        return False
         
     return uzytkownik
 def start_sesji(db: Session, user_id: int):
@@ -214,3 +217,30 @@ def oblicz_moje_podsumowanie(db: Session, uzytkownik: models.Uzytkownik):
     )
     miesiace = _oblicz_podsumowanie_miesiecy(dni)
     return dni, miesiace, aktywna
+def zmien_status_konta(db: Session, uzytkownik_id: int, aktywny: bool):
+    uzytkownik = pobierz_uzytkownika_po_id(db, uzytkownik_id)
+    if uzytkownik:
+        uzytkownik.aktywny = aktywny
+        db.commit()
+        db.refresh(uzytkownik)
+    return uzytkownik
+
+def dodaj_sesje_recznie(db: Session, uzytkownik_id: int, sesja_dane: schemas.SesjaPracyManual):
+    nowa_sesja = models.SesjaPracy(
+        uzytkownik_id=uzytkownik_id,
+        start_sesji=sesja_dane.start_sesji,
+        koniec_sesji=sesja_dane.koniec_sesji
+    )
+    db.add(nowa_sesja)
+    db.commit()
+    db.refresh(nowa_sesja)
+    return nowa_sesja
+
+def edytuj_sesje(db: Session, sesja_id: int, sesja_dane: schemas.SesjaPracyManual):
+    sesja = db.query(models.SesjaPracy).filter(models.SesjaPracy.id == sesja_id).first()
+    if sesja:
+        sesja.start_sesji = sesja_dane.start_sesji
+        sesja.koniec_sesji = sesja_dane.koniec_sesji
+        db.commit()
+        db.refresh(sesja)
+    return sesja

@@ -5,15 +5,23 @@ import Header from './Header';
 export default function PanelAdmina() {
     const [pracownicy, setPracownicy] = useState([]);
     
-    // Zmienna, która mówi nam, czy formularz ma być widoczny
+    // --- STANY DLA DODAWANIA PRACOWNIKA ---
     const [pokazFormularz, setPokazFormularz] = useState(false);
-
-    // Zmienne do trzymania wpisanych danych
     const [imie, setImie] = useState('');
     const [nazwisko, setNazwisko] = useState('');
     const [email, setEmail] = useState('');
     const [haslo, setHaslo] = useState('');
-    const [rola, setRola] = useState('pracownik'); // Domyślnie nowa osoba to pracownik
+    const [rola, setRola] = useState('pracownik');
+
+    // --- STANY DLA ZARZĄDZANIA CZASEM ---
+    const [wybranyPracownik, setWybranyPracownik] = useState(null);
+    const [sesjePracownika, setSesjePracownika] = useState([]);
+    
+    // Formularz sesji
+    const [trybFormularzaSesji, setTrybFormularzaSesji] = useState('dodaj'); // 'dodaj' lub 'edytuj'
+    const [idSesjiDoEdycji, setIdSesjiDoEdycji] = useState('');
+    const [startSesji, setStartSesji] = useState('');
+    const [koniecSesji, setKoniecSesji] = useState('');
 
     const pobierzPracownikow = async () => {
         try {
@@ -28,29 +36,99 @@ export default function PanelAdmina() {
         pobierzPracownikow();
     }, []);
 
-    // Funkcja wywoływana po kliknięciu "Zapisz"
+    // Helper: Konwertuje datę z bazy (UTC/ISO) na format pasujący do <input type="datetime-local">
+    const formatToDatetimeLocal = (isoString) => {
+        if (!isoString) return '';
+        const d = new Date(isoString);
+        const tzOffset = d.getTimezoneOffset() * 60000; // offset w milisekundach
+        return new Date(d - tzOffset).toISOString().slice(0, 16);
+    };
+
+    // Helper: Czytelne formatowanie daty do tabeli
+    const formatujDateWyswietlania = (isoString) => {
+        if (!isoString) return 'Trwa (brak końca)';
+        return new Date(isoString).toLocaleString('pl-PL', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+        });
+    };
+
+    // --- FUNKCJA: DODAWANIE PRACOWNIKA ---
     const handleDodajPracownika = async (e) => {
-        e.preventDefault(); // Powstrzymuje stronę przed przeładowaniem
+        e.preventDefault();
         try {
-            // Wysyłamy paczkę JSON do Pythona
-            await api.post('/admin/dodaj-pracownika', {
-                imie: imie,
-                nazwisko: nazwisko,
-                email: email,
-                haslo: haslo,
-                rola: rola
-            });
-            
+            await api.post('/admin/dodaj-pracownika', { imie, nazwisko, email, haslo, rola });
             alert("Użytkownik dodany pomyślnie!");
-            
-            // Sprzątamy po sukcesie:
-            setPokazFormularz(false); // Chowamy formularz
-            pobierzPracownikow();     // Pobieramy nową listę do tabeli
-            
-            // Czyścimy pola tekstowe na przyszłość
+            setPokazFormularz(false);
+            pobierzPracownikow();
             setImie(''); setNazwisko(''); setEmail(''); setHaslo(''); setRola('pracownik');
         } catch (error) {
             alert(error.response?.data?.detail || "Błąd podczas dodawania!");
+        }
+    };
+
+    // --- FUNKCJA: ZMIANA STATUSU (BLOKOWANIE) ---
+    const handleZmienStatus = async (id, obecnyStatus) => {
+        try {
+            await api.put(`/admin/uzytkownicy/${id}/status`, { aktywny: !obecnyStatus });
+            pobierzPracownikow();
+        } catch (error) {
+            alert(error.response?.data?.detail || "Błąd zmiany statusu!");
+        }
+    };
+
+    // --- FUNKCJA: OTWIERANIE PANELU CZASU ---
+    const otworzZarzadzanieCzasem = async (pracownik) => {
+        setWybranyPracownik(pracownik);
+        setPokazFormularz(false); // Chowamy formularz pracownika, by nie śmiecił na ekranie
+        pobierzSesjePracownika(pracownik.id);
+        resetujFormularzSesji();
+    };
+
+    const pobierzSesjePracownika = async (pracownikId) => {
+        try {
+            const response = await api.get(`/admin/uzytkownicy/${pracownikId}/sesje`);
+            setSesjePracownika(response.data);
+        } catch (error) {
+            alert("Błąd podczas pobierania historii sesji pracownika.");
+        }
+    };
+
+    // --- FUNKCJE: OBSŁUGA FORMULARZA SESJI ---
+    const resetujFormularzSesji = () => {
+        setTrybFormularzaSesji('dodaj');
+        setIdSesjiDoEdycji('');
+        setStartSesji('');
+        setKoniecSesji('');
+    };
+
+    const przygotujDoEdycji = (sesja) => {
+        setTrybFormularzaSesji('edytuj');
+        setIdSesjiDoEdycji(sesja.id);
+        setStartSesji(formatToDatetimeLocal(sesja.start_sesji));
+        setKoniecSesji(formatToDatetimeLocal(sesja.koniec_sesji));
+    };
+
+    const handleZapiszSesje = async (e) => {
+        e.preventDefault();
+        const payload = {
+            start_sesji: new Date(startSesji).toISOString(),
+            koniec_sesji: koniecSesji ? new Date(koniecSesji).toISOString() : null
+        };
+
+        try {
+            if (trybFormularzaSesji === 'dodaj') {
+                await api.post(`/admin/uzytkownicy/${wybranyPracownik.id}/sesje`, payload);
+                alert("Nowy wpis został dodany!");
+            } else {
+                await api.put(`/admin/sesje/${idSesjiDoEdycji}`, payload);
+                alert("Wpis zaktualizowany pomyślnie!");
+            }
+            // Odśwież listę sesji i wyczyść formularz
+            pobierzSesjePracownika(wybranyPracownik.id);
+            resetujFormularzSesji();
+        } catch (error) {
+            alert(error.response?.data?.detail || "Błąd zapisu sesji!");
         }
     };
 
@@ -59,24 +137,16 @@ export default function PanelAdmina() {
             <Header />
             <div className="panel-container">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                    <h2>Zarządzanie pracownikami</h2>
+                    <h2>Zarządzanie systemem</h2>
                     <button 
-                        onClick={() => setPokazFormularz(!pokazFormularz)}
-                        style={{ 
-                            padding: '10px 20px', 
-                            background: pokazFormularz ? '#64748b' : '#0284c7', // Zmienia kolor, gdy otwarty
-                            color: 'white', 
-                            border: 'none', 
-                            borderRadius: '6px', 
-                            cursor: 'pointer', 
-                            fontWeight: 'bold' 
-                        }}
+                        onClick={() => { setPokazFormularz(!pokazFormularz); setWybranyPracownik(null); }}
+                        style={{ padding: '10px 20px', background: pokazFormularz ? '#64748b' : '#0284c7', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
                     >
                         {pokazFormularz ? "Anuluj dodawanie" : "+ Dodaj pracownika"}
                     </button>
                 </div>
 
-                {/* Ten blok wyrenderuje się TYLKO, gdy pokazFormularz jest true */}
+                {/* FORMULARZ NOWEGO PRACOWNIKA */}
                 {pokazFormularz && (
                     <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
                         <h3 style={{ marginTop: 0 }}>Nowy użytkownik</h3>
@@ -97,29 +167,119 @@ export default function PanelAdmina() {
                     </div>
                 )}
 
+                {/* PANEL ZARZĄDZANIA CZASEM DLA WYBRANEGO PRACOWNIKA (NOWE PODEJŚCIE) */}
+                {wybranyPracownik && (
+                    <div style={{ background: '#fffbeb', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #fde68a' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h3 style={{ marginTop: 0, color: '#b45309' }}>
+                                Sesje pracownika: {wybranyPracownik.imie} {wybranyPracownik.nazwisko}
+                            </h3>
+                            <button onClick={() => setWybranyPracownik(null)} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>✖ Zamknij panel</button>
+                        </div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+                            {/* LEWA KOLUMNA: Historia Sesji */}
+                            <div style={{ background: 'white', padding: '15px', borderRadius: '6px', border: '1px solid #fef3c7', maxHeight: '400px', overflowY: 'auto' }}>
+                                <h4 style={{marginTop: 0}}>Ostatnie wpisy w bazie</h4>
+                                {sesjePracownika.length === 0 ? (
+                                    <p style={{fontSize: '14px', color: 'gray'}}>Pracownik nie posiada żadnych sesji.</p>
+                                ) : (
+                                    <table style={{ fontSize: '13px', width: '100%' }}>
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Rozpoczęcie</th>
+                                                <th>Zakończenie</th>
+                                                <th>Akcja</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {sesjePracownika.map(sesja => (
+                                                <tr key={sesja.id} style={{ background: idSesjiDoEdycji === sesja.id ? '#fef08a' : 'transparent' }}>
+                                                    <td>#{sesja.id}</td>
+                                                    <td>{formatujDateWyswietlania(sesja.start_sesji)}</td>
+                                                    <td>{formatujDateWyswietlania(sesja.koniec_sesji)}</td>
+                                                    <td>
+                                                        <button 
+                                                            onClick={() => przygotujDoEdycji(sesja)}
+                                                            style={{ background: '#0284c7', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                                                        >
+                                                            Edytuj
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+
+                            {/* PRAWA KOLUMNA: Dynamiczny Formularz */}
+                            <form onSubmit={handleZapiszSesje} style={{ background: 'white', padding: '15px', borderRadius: '6px', border: '1px solid #fef3c7', height: 'fit-content' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <h4 style={{marginTop: 0, color: trybFormularzaSesji === 'edytuj' ? '#0f766e' : '#d97706'}}>
+                                        {trybFormularzaSesji === 'edytuj' ? `Edytujesz sesję #${idSesjiDoEdycji}` : 'Dodaj nowy wpis'}
+                                    </h4>
+                                    {trybFormularzaSesji === 'edytuj' && (
+                                        <button type="button" onClick={resetujFormularzSesji} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}>Anuluj</button>
+                                    )}
+                                </div>
+
+                                <label style={{fontSize: '12px', color: 'gray'}}>Start pracy:</label>
+                                <input type="datetime-local" required value={startSesji} onChange={e => setStartSesji(e.target.value)} style={{ width: '100%', padding: '8px', marginBottom: '10px', boxSizing: 'border-box' }} />
+                                
+                                <label style={{fontSize: '12px', color: 'gray'}}>Koniec pracy:</label>
+                                <input type="datetime-local" value={koniecSesji} onChange={e => setKoniecSesji(e.target.value)} style={{ width: '100%', padding: '8px', marginBottom: '15px', boxSizing: 'border-box' }} />
+                                
+                                <button type="submit" style={{ width: '100%', padding: '10px', background: trybFormularzaSesji === 'edytuj' ? '#0f766e' : '#d97706', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                    {trybFormularzaSesji === 'edytuj' ? 'Zapisz zmiany' : '+ Dodaj sesję'}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* GŁÓWNA TABELA PRACOWNIKÓW */}
                 <table>
                     <thead>
                         <tr>
                             <th>ID</th>
-                            <th>Imię</th>
-                            <th>Nazwisko</th>
+                            <th>Imię i Nazwisko</th>
                             <th>Email</th>
                             <th>Rola</th>
+                            <th>Status</th>
+                            <th>Akcje Admina</th>
                         </tr>
                     </thead>
                     <tbody>
                         {pracownicy.length === 0 ? (
                             <tr>
-                                <td colSpan="5" style={{textAlign: 'center'}}>Brak pracowników w systemie</td>
+                                <td colSpan="6" style={{textAlign: 'center'}}>Brak pracowników w systemie</td>
                             </tr>
                         ) : (
                             pracownicy.map((pracownik) => (
                                 <tr key={pracownik.id}>
                                     <td>{pracownik.id}</td>
-                                    <td>{pracownik.imie}</td>
-                                    <td>{pracownik.nazwisko}</td>
+                                    <td>{pracownik.imie} {pracownik.nazwisko}</td>
                                     <td>{pracownik.email}</td>
                                     <td style={{ textTransform: 'capitalize' }}>{pracownik.rola}</td>
+                                    <td style={{ color: pracownik.aktywny ? 'green' : 'red', fontWeight: 'bold' }}>
+                                        {pracownik.aktywny ? 'Aktywny' : 'Zablokowany'}
+                                    </td>
+                                    <td>
+                                        <button 
+                                            onClick={() => handleZmienStatus(pracownik.id, pracownik.aktywny)}
+                                            style={{ background: pracownik.aktywny ? '#ef4444' : '#22c55e', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', marginRight: '5px' }}
+                                        >
+                                            {pracownik.aktywny ? 'Blokuj' : 'Odblokuj'}
+                                        </button>
+                                        <button 
+                                            onClick={() => otworzZarzadzanieCzasem(pracownik)}
+                                            style={{ background: '#eab308', color: 'black', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                        >
+                                            Czas ⏱
+                                        </button>
+                                    </td>
                                 </tr>
                             ))
                         )}
