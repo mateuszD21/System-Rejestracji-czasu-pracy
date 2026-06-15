@@ -32,3 +32,49 @@ body, html {
 table { width: 100%; border-collapse: collapse; margin-top: 20px; }
 th, td { border: 1px solid #e2e8f0; padding: 12px 15px; text-align: left; }
 th { background-color: #f8fafc; font-weight: 600; }
+
+/* Panel kierownika */
+.clickable-row { cursor: pointer; transition: background-color 0.15s; }
+.clickable-row:hover { background-color: #f0f9ff; }
+.btn-back { padding: 8px 16px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 20px; }
+.btn-back:hover { background: #475569; }
+.settings-box { background: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #e2e8f0; }
+.settings-form { display: grid; gap: 15px; grid-template-columns: 1fr 1fr 1fr auto; align-items: end; }
+.settings-form label { display: flex; flex-direction: column; gap: 6px; font-weight: 500; font-size: 14px; }
+.settings-form input { padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; }
+.btn-save { padding: 10px 20px; background: #22c55e; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; height: fit-content; }
+.btn-save:hover { background: #16a34a; }
+.btn-save:disabled { background: #94a3b8; cursor: not-allowed; }
+
+/* Panel pracownika */
+.panel-pracownika { max-width: 900px; }
+.status-aktywna { text-align: center; background: #dcfce7; color: #166534; padding: 10px 16px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; }
+.actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; }
+.tab { padding: 10px 20px; background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; cursor: pointer; font-weight: 600; color: #64748b; font-size: 15px; }
+.tab-active { color: #0284c7; border-bottom-color: #0284c7; }
+.filtr-miesiaca { margin-bottom: 16px; }
+.filtr-miesiaca label { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+.filtr-miesiaca select { padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; }
+.dni-lista { display: flex; flex-direction: column; gap: 8px; }
+.dzien-karta { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.dzien-naglowek { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #f8fafc; border: none; cursor: pointer; text-align: left; gap: 12px; }
+.dzien-naglowek:hover { background: #f0f9ff; }
+.dzien-info { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.dzien-godziny { font-size: 13px; color: #64748b; }
+.dzien-zarobek { font-weight: bold; color: #0284c7; }
+.dzien-strzalka { color: #94a3b8; font-size: 12px; }
+.dzien-sesje { padding: 0 16px 16px; background: white; }
+.dzien-sesje table { margin-top: 8px; font-size: 14px; }
+.dzien-podsumowanie { display: flex; gap: 20px; padding: 10px 0; font-size: 13px; color: #64748b; }
+.stawki-info { display: flex; flex-wrap: wrap; gap: 16px; background: #f8fafc; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; color: #475569; }
+.wiersz-wybrany { background: #f0f9ff; }
+.miesiac-podsumowanie { margin-top: 30px; padding-top: 20px; border-top: 2px solid #e2e8f0; }
+.miesiac-podsumowanie h3 { margin-top: 0; color: #334155; }
+.podsumowanie-kafelki { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.kafelek { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.kafelek-glowny { background: #eff6ff; border-color: #bfdbfe; }
+.kafelek-label { font-size: 13px; color: #64748b; }
+.kafelek-wartosc { font-size: 20px; font-weight: bold; color: #1e293b; }
+.kafelek-glowny .kafelek-wartosc { color: #0284c7; font-size: 24px; }
+.kafelek-nadgodziny { color: #ea580c; }

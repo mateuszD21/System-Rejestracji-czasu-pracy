@@ -21,7 +21,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Adres Twojego Reacta
+    allow_origins=["http://localhost:5173"], 
     allow_credentials=True,
     allow_methods=["*"], # Zezwala na GET, POST, itp.
     allow_headers=["*"], # Zezwala na wszystkie nagłówki (w tym tokeny)
@@ -46,6 +46,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
+def wymagaj_kierownika(current_user: models.Uzytkownik = Depends(get_current_user)):
+    if current_user.rola not in (models.RolaUzytkownika.kierownik, models.RolaUzytkownika.administrator):
+        raise HTTPException(status_code=403, detail="Brak uprawnień kierownika")
+    return current_user
 
 # --- LOGOWANIE (Generuje Token) ---
 @app.post("/token")
@@ -123,3 +128,107 @@ def get_moje_sesje(
     current_user: models.Uzytkownik = Depends(get_current_user)
 ):
     return crud.pobierz_sesje_uzytkownika(db, uzytkownik_id=current_user.id)
+
+@app.get("/czas/moje-podsumowanie", response_model=schemas.MojePodsumowanieResponse)
+def get_moje_podsumowanie(
+    db: Session = Depends(database.get_db),
+    current_user: models.Uzytkownik = Depends(get_current_user)
+):
+    dni, miesiace, aktywna = crud.oblicz_moje_podsumowanie(db, current_user)
+    return schemas.MojePodsumowanieResponse(
+        norma_godzinowa=current_user.norma_godzinowa,
+        stawka_godzinowa=current_user.stawka_godzinowa,
+        stawka_nadgodzinowa=current_user.stawka_nadgodzinowa,
+        aktywna_sesja=aktywna,
+        miesiace=[schemas.MiesiacZarobkowResponse(**m) for m in miesiace],
+        dni=[schemas.DzienZSesjamiResponse(
+            data=d["data"],
+            sesje=[schemas.SesjaPracyInfo(**s) for s in d["sesje"]],
+            godziny_przepracowane=d["godziny_przepracowane"],
+            godziny_normalne=d["godziny_normalne"],
+            godziny_nadgodzin=d["godziny_nadgodzin"],
+            zarobek=d["zarobek"],
+            zarobek_normalny=d["zarobek_normalny"],
+            zarobek_nadgodzin=d["zarobek_nadgodzin"],
+        ) for d in dni],
+    )
+
+@app.get("/kierownik/pracownicy", response_model=List[schemas.PracownikKierownikaResponse])
+def get_pracownicy_kierownika(
+    db: Session = Depends(database.get_db),
+    current_user: models.Uzytkownik = Depends(wymagaj_kierownika)
+):
+    pracownicy = crud.pobierz_pracownikow(db)
+    wynik = []
+    for pracownik in pracownicy:
+        _, pensja = crud.oblicz_szczegoly_pracownika(db, pracownik)
+        wynik.append(schemas.PracownikKierownikaResponse(
+            id=pracownik.id,
+            imie=pracownik.imie,
+            nazwisko=pracownik.nazwisko,
+            norma_godzinowa=pracownik.norma_godzinowa,
+            stawka_godzinowa=pracownik.stawka_godzinowa,
+            pensja_do_wyplaty=pensja,
+        ))
+    return wynik
+
+@app.get("/kierownik/pracownicy/{pracownik_id}", response_model=schemas.SzczegolyPracownikaResponse)
+def get_szczegoly_pracownika(
+    pracownik_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.Uzytkownik = Depends(wymagaj_kierownika)
+):
+    pracownik = crud.pobierz_uzytkownika_po_id(db, pracownik_id)
+    if not pracownik or pracownik.rola != models.RolaUzytkownika.pracownik:
+        raise HTTPException(status_code=404, detail="Nie znaleziono pracownika")
+    dni, pensja = crud.oblicz_szczegoly_pracownika(db, pracownik)
+    return schemas.SzczegolyPracownikaResponse(
+        id=pracownik.id,
+        imie=pracownik.imie,
+        nazwisko=pracownik.nazwisko,
+        norma_godzinowa=pracownik.norma_godzinowa,
+        stawka_godzinowa=pracownik.stawka_godzinowa,
+        stawka_nadgodzinowa=pracownik.stawka_nadgodzinowa,
+        pensja_do_wyplaty=pensja,
+        dni=[schemas.DzienPracyResponse(
+            data=dzien["data"],
+            godziny_przepracowane=dzien["godziny_przepracowane"],
+            godziny_normalne=dzien["godziny_normalne"],
+            godziny_nadgodzin=dzien["godziny_nadgodzin"],
+            zarobek=dzien["zarobek"],
+            zarobek_normalny=dzien["zarobek_normalny"],
+            zarobek_nadgodzin=dzien["zarobek_nadgodzin"],
+        ) for dzien in dni],
+    )
+
+@app.put("/kierownik/pracownicy/{pracownik_id}/ustawienia", response_model=schemas.SzczegolyPracownikaResponse)
+def aktualizuj_ustawienia_pracownika(
+    pracownik_id: int,
+    ustawienia: schemas.UstawieniaPlacowUpdate,
+    db: Session = Depends(database.get_db),
+    current_user: models.Uzytkownik = Depends(wymagaj_kierownika)
+):
+    pracownik = crud.pobierz_uzytkownika_po_id(db, pracownik_id)
+    if not pracownik or pracownik.rola != models.RolaUzytkownika.pracownik:
+        raise HTTPException(status_code=404, detail="Nie znaleziono pracownika")
+    crud.aktualizuj_ustawienia_placow(db, pracownik_id, ustawienia)
+    db.refresh(pracownik)
+    dni, pensja = crud.oblicz_szczegoly_pracownika(db, pracownik)
+    return schemas.SzczegolyPracownikaResponse(
+        id=pracownik.id,
+        imie=pracownik.imie,
+        nazwisko=pracownik.nazwisko,
+        norma_godzinowa=pracownik.norma_godzinowa,
+        stawka_godzinowa=pracownik.stawka_godzinowa,
+        stawka_nadgodzinowa=pracownik.stawka_nadgodzinowa,
+        pensja_do_wyplaty=pensja,
+        dni=[schemas.DzienPracyResponse(
+            data=dzien["data"],
+            godziny_przepracowane=dzien["godziny_przepracowane"],
+            godziny_normalne=dzien["godziny_normalne"],
+            godziny_nadgodzin=dzien["godziny_nadgodzin"],
+            zarobek=dzien["zarobek"],
+            zarobek_normalny=dzien["zarobek_normalny"],
+            zarobek_nadgodzin=dzien["zarobek_nadgodzin"],
+        ) for dzien in dni],
+    )
