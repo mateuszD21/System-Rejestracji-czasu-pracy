@@ -17,8 +17,7 @@ export default function PanelAdmina() {
     const [wybranyPracownik, setWybranyPracownik] = useState(null);
     const [sesjePracownika, setSesjePracownika] = useState([]);
     
-    // Formularz sesji
-    const [trybFormularzaSesji, setTrybFormularzaSesji] = useState('dodaj'); // 'dodaj' lub 'edytuj'
+    const [trybFormularzaSesji, setTrybFormularzaSesji] = useState('dodaj'); 
     const [idSesjiDoEdycji, setIdSesjiDoEdycji] = useState('');
     const [startSesji, setStartSesji] = useState('');
     const [koniecSesji, setKoniecSesji] = useState('');
@@ -36,24 +35,22 @@ export default function PanelAdmina() {
         pobierzPracownikow();
     }, []);
 
-    // Helper: Konwertuje datę z bazy (UTC/ISO) na format pasujący do <input type="datetime-local">
-    const formatToDatetimeLocal = (isoString) => {
-        if (!isoString) return '';
-        const d = new Date(isoString);
-        const tzOffset = d.getTimezoneOffset() * 60000; // offset w milisekundach
-        return new Date(d - tzOffset).toISOString().slice(0, 16);
+    // --- POPRAWIONE FORMATOWANIE DAT (Rozwiązanie problemu stref czasowych) ---
+    // Python zwraca "YYYY-MM-DDTHH:mm:ss" (np. "2023-11-20T14:30:00").
+    // Input datetime-local potrzebuje "YYYY-MM-DDTHH:mm". Odcinamy więc tylko sekundy.
+    const formatToDatetimeLocal = (dateString) => {
+        if (!dateString) return '';
+        return dateString.slice(0, 16); 
     };
 
-    // Helper: Czytelne formatowanie daty do tabeli
-    const formatujDateWyswietlania = (isoString) => {
-        if (!isoString) return 'Trwa (brak końca)';
-        return new Date(isoString).toLocaleString('pl-PL', {
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit'
-        });
+    // Formatuje datę tylko do wyświetlenia w lewej tabelce
+    const formatujDateWyswietlania = (dateString) => {
+        if (!dateString) return 'Trwa (brak końca)';
+        const [data, czas] = dateString.split('T');
+        return `${data} ${czas.slice(0, 5)}`;
     };
 
-    // --- FUNKCJA: DODAWANIE PRACOWNIKA ---
+    // --- FUNKCJE API ---
     const handleDodajPracownika = async (e) => {
         e.preventDefault();
         try {
@@ -67,7 +64,6 @@ export default function PanelAdmina() {
         }
     };
 
-    // --- FUNKCJA: ZMIANA STATUSU (BLOKOWANIE) ---
     const handleZmienStatus = async (id, obecnyStatus) => {
         try {
             await api.put(`/admin/uzytkownicy/${id}/status`, { aktywny: !obecnyStatus });
@@ -77,10 +73,9 @@ export default function PanelAdmina() {
         }
     };
 
-    // --- FUNKCJA: OTWIERANIE PANELU CZASU ---
     const otworzZarzadzanieCzasem = async (pracownik) => {
         setWybranyPracownik(pracownik);
-        setPokazFormularz(false); // Chowamy formularz pracownika, by nie śmiecił na ekranie
+        setPokazFormularz(false); 
         pobierzSesjePracownika(pracownik.id);
         resetujFormularzSesji();
     };
@@ -94,7 +89,6 @@ export default function PanelAdmina() {
         }
     };
 
-    // --- FUNKCJE: OBSŁUGA FORMULARZA SESJI ---
     const resetujFormularzSesji = () => {
         setTrybFormularzaSesji('dodaj');
         setIdSesjiDoEdycji('');
@@ -111,9 +105,12 @@ export default function PanelAdmina() {
 
     const handleZapiszSesje = async (e) => {
         e.preventDefault();
+        
+        // Zamiast uzywać new Date().toISOString() które psuje strefę czasową, 
+        // po prostu wysyłamy string z inputa i doklejamy sekundy (:00).
         const payload = {
-            start_sesji: new Date(startSesji).toISOString(),
-            koniec_sesji: koniecSesji ? new Date(koniecSesji).toISOString() : null
+            start_sesji: startSesji + ":00",
+            koniec_sesji: koniecSesji ? (koniecSesji + ":00") : null
         };
 
         try {
@@ -124,7 +121,6 @@ export default function PanelAdmina() {
                 await api.put(`/admin/sesje/${idSesjiDoEdycji}`, payload);
                 alert("Wpis zaktualizowany pomyślnie!");
             }
-            // Odśwież listę sesji i wyczyść formularz
             pobierzSesjePracownika(wybranyPracownik.id);
             resetujFormularzSesji();
         } catch (error) {
@@ -146,7 +142,6 @@ export default function PanelAdmina() {
                     </button>
                 </div>
 
-                {/* FORMULARZ NOWEGO PRACOWNIKA */}
                 {pokazFormularz && (
                     <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
                         <h3 style={{ marginTop: 0 }}>Nowy użytkownik</h3>
@@ -167,7 +162,6 @@ export default function PanelAdmina() {
                     </div>
                 )}
 
-                {/* PANEL ZARZĄDZANIA CZASEM DLA WYBRANEGO PRACOWNIKA (NOWE PODEJŚCIE) */}
                 {wybranyPracownik && (
                     <div style={{ background: '#fffbeb', padding: '20px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #fde68a' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -178,7 +172,6 @@ export default function PanelAdmina() {
                         </div>
                         
                         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
-                            {/* LEWA KOLUMNA: Historia Sesji */}
                             <div style={{ background: 'white', padding: '15px', borderRadius: '6px', border: '1px solid #fef3c7', maxHeight: '400px', overflowY: 'auto' }}>
                                 <h4 style={{marginTop: 0}}>Ostatnie wpisy w bazie</h4>
                                 {sesjePracownika.length === 0 ? (
@@ -214,7 +207,6 @@ export default function PanelAdmina() {
                                 )}
                             </div>
 
-                            {/* PRAWA KOLUMNA: Dynamiczny Formularz */}
                             <form onSubmit={handleZapiszSesje} style={{ background: 'white', padding: '15px', borderRadius: '6px', border: '1px solid #fef3c7', height: 'fit-content' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <h4 style={{marginTop: 0, color: trybFormularzaSesji === 'edytuj' ? '#0f766e' : '#d97706'}}>
@@ -239,7 +231,6 @@ export default function PanelAdmina() {
                     </div>
                 )}
 
-                {/* GŁÓWNA TABELA PRACOWNIKÓW */}
                 <table>
                     <thead>
                         <tr>
