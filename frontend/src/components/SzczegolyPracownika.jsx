@@ -11,7 +11,7 @@ export default function SzczegolyPracownika() {
     const [stawkaNadgodzinowa, setStawkaNadgodzinowa] = useState('');
     const [normaGodzinowa, setNormaGodzinowa] = useState('');
     const [zapisuje, setZapisuje] = useState(false);
-
+// funkcja pobierająca szczegółowe statystyki oraz aktualne stawki płacowe wybranego pracownika
     const pobierzDane = async () => {
         try {
             const response = await api.get(`/kierownik/pracownicy/${id}`);
@@ -24,11 +24,12 @@ export default function SzczegolyPracownika() {
             navigate('/kierownik');
         }
     };
-
+// hook wywołujący pobranie danych pracownika przy każdej zmianie identyfikatora ID w adresie URL
     useEffect(() => {
         pobierzDane();
     }, [id]);
 
+// funkcja wysyłająca zaktualizowany formularz stawek i normy dobowej pracownika do API
     const handleZapiszUstawienia = async (e) => {
         e.preventDefault();
         setZapisuje(true);
@@ -47,6 +48,7 @@ export default function SzczegolyPracownika() {
         }
     };
 
+// funkcja formatująca datę pobraną z bazy do pełnego opisu tekstowego w języku polskim
     const formatujDate = (dataString) => {
         return new Date(dataString).toLocaleDateString('pl-PL', {
             weekday: 'long',
@@ -55,9 +57,9 @@ export default function SzczegolyPracownika() {
             day: 'numeric',
         });
     };
-
+// funkcja formatująca wartość liczbową do zapisu walutowego z dwoma miejscami po przecinku
     const formatujKwote = (kwota) => `${kwota.toFixed(2)} zł`;
-
+// funkcja formatująca liczbę godzin do czytelnego formatu tekstowego
     const formatujGodziny = (godziny) => `${godziny.toFixed(2)} h`;
 
     if (!dane) {

@@ -14,6 +14,7 @@ export default function PanelPracownika() {
     const [rozwinietyDzien, setRozwinietyDzien] = useState(null);
     const [naPrzerwie, setNaPrzerwie] = useState(false); // NOWY STAN DLA WSTRZYMANIA PRACY
 
+// funkcja pobierająca podsumowanie czasu pracy oraz stawek zalogowanego pracownika
     const pobierzDane = async () => {
         try {
             const response = await api.get('/czas/moje-podsumowanie');
@@ -34,11 +35,12 @@ export default function PanelPracownika() {
             console.error("Błąd pobierania danych", error);
         }
     };
-
+// hook wywołujący pobranie danych pracownika przy montowaniu komponentu
     useEffect(() => {
         pobierzDane();
     }, []);
 
+// funkcja wysyłająca żądanie rozpoczęcia nowej sesji lub wznowienia pracy po pauzie
     const handleStart = async () => {
         try {
             await api.post('/czas/start');
@@ -49,7 +51,8 @@ export default function PanelPracownika() {
             alert(error.response?.data?.detail || "Błąd!");
         }
     };
-
+    
+// funkcja wysyłająca żądanie ostatecznego zakończenia bieżącej sesji i dnia pracy
     const handleStop = async () => {
         try {
             await api.post('/czas/stop');
@@ -61,7 +64,7 @@ export default function PanelPracownika() {
         }
     };
 
-    // FUNKCJA DLA PRZYCISKU WSTRZYMANIA PRACY (NOWA)
+// funkcja zatrzymująca bieżącą sesję pracy w celu rozpoczęcia rejestrowanej przerwy
     const handleWstrzymaj = async () => {
         try {
             await api.post('/czas/stop');
@@ -74,6 +77,7 @@ export default function PanelPracownika() {
         }
     };
 
+    // funkcja formatująca pełną datę do czytelnego formatu lokalnego z godziną i minutą
     const formatujDate = (dataString) => {
         if (!dataString) return "Trwa...";
         return new Date(dataString).toLocaleString('pl-PL', {
@@ -81,36 +85,36 @@ export default function PanelPracownika() {
             hour: '2-digit', minute: '2-digit',
         });
     };
-
+// funkcja formatująca datę do pełnego opisu tekstowego z nazwą dnia tygodnia
     const formatujDateDzien = (dataString) => {
         return new Date(dataString).toLocaleDateString('pl-PL', {
             weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
         });
     };
-
+// funkcja formatująca wartość liczbową na zapis walutowy w złotówkach
     const formatujKwote = (kwota) => {
         if (kwota == null) return '—';
         return `${kwota.toFixed(2)} zł`;
     };
-
+// funkcja formatująca liczbę godzin do zapisu z dwoma miejscami po przecinku
     const formatujGodziny = (h) => `${h.toFixed(2)} h`;
-
+// funkcja łącząca nazwę miesiąca z rokiem do celów nagłówkowych
     const nazwaMiesiaca = (rok, miesiac) => `${NAZWY_MIESIECY[miesiac - 1]} ${rok}`;
-
+// funkcja generująca tekstowy klucz identyfikacyjny dla wybranego miesiąca i roku
     const kluczMiesiaca = (rok, miesiac) => `${rok}-${miesiac}`;
-
+// funkcja wyciągająca wartości liczbowe roku i miesiąca z pełnego ciągu daty ISO
     const parseData = (dataStr) => {
         const [rok, miesiac] = dataStr.split('T')[0].split('-').map(Number);
         return { rok, miesiac };
     };
-
+// zmienna filtrująca listę dni pracy pod kątem aktualnie wybranego miesiąca
     const dniWMiesiacu = dane?.dni.filter((dzien) => {
         if (!wybranyMiesiac) return true;
         const [rok, miesiac] = wybranyMiesiac.split('-').map(Number);
         const parsed = parseData(dzien.data);
         return parsed.rok === rok && parsed.miesiac === miesiac;
     }) ?? [];
-
+// zmienna wyszukująca kompletne zagregowane dane finansowo-godzinowe dla wybranego miesiąca
     const wybranyMiesiacDane = dane?.miesiace.find((m) =>
         kluczMiesiaca(m.rok, m.miesiac) === wybranyMiesiac
     );
@@ -138,16 +142,16 @@ export default function PanelPracownika() {
                     </div>
                 )}
                 
-                {/* NOWY STATUS WIZUALNY DLA PRZERWY */}
+                {}
                 {!trwaSesja && naPrzerwie && (
                     <div className="status-aktywna" style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
                         ☕ Jesteś na przerwie (Praca wstrzymana)
                     </div>
                 )}
 
-                {/* ZAKTUALIZOWANA SEKCJA PRZYCISKÓW AKCJI */}
+                {}
                 <div className="actions">
-                    {/* Przycisk startuje pracę od zera lub wznawia ją po przerwie */}
+                    {}
                     <button 
                         className="btn-start" 
                         onClick={handleStart} 
@@ -157,7 +161,7 @@ export default function PanelPracownika() {
                         {naPrzerwie ? "▶ Wznów pracę" : "Rozpocznij pracę"}
                     </button>
 
-                    {/* Przycisk pauzy aktywuje się tylko, gdy sesja trwa */}
+                    {}
                     <button 
                         className="btn-stop" 
                         onClick={handleWstrzymaj} 
@@ -167,7 +171,7 @@ export default function PanelPracownika() {
                         ⏸ Wstrzymaj (Przerwa)
                     </button>
 
-                    {/* Przycisk stopu zamyka ostatecznie sesję i dzień pracy */}
+                    {}
                     <button 
                         className="btn-stop" 
                         onClick={handleStop} 

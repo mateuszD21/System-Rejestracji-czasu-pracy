@@ -5,23 +5,20 @@ from datetime import datetime, date
 from collections import defaultdict
 from typing import Optional
 
-# 1. Funkcje pomocnicze do czystego bcrypta
+# funkcja hashująca hasło
 def zahashuj_haslo(haslo: str) -> str:
-    # Bcrypt wymaga bajtów, więc musimy zamienić tekst na bajty
     bajty_hasla = haslo.encode('utf-8')
-    # Generujemy "sól" (losowy dodatek do hasła)
     sol = bcrypt.gensalt()
-    # Haszujemy
     hasz = bcrypt.hashpw(bajty_hasla, sol)
-    # Zwracamy jako zwykły tekst, żeby zapisać w bazie
     return hasz.decode('utf-8')
 
+# funkcja weryfikująca poprawność hasła
 def zweryfikuj_haslo(haslo_jawne: str, haslo_z_bazy: str) -> bool:
     bajty_hasla = haslo_jawne.encode('utf-8')
     bajty_hasza = haslo_z_bazy.encode('utf-8')
     return bcrypt.checkpw(bajty_hasla, bajty_hasza)
 
-# 2. Operacje na bazie danych
+# funkcja tworząca nowego użytkownika w bazie
 def utworz_uzytkownika(db: Session, user: schemas.UzytkownikCreate):
     haslo_zaszyfrowane = zahashuj_haslo(user.haslo)
     
@@ -38,10 +35,10 @@ def utworz_uzytkownika(db: Session, user: schemas.UzytkownikCreate):
     db.refresh(db_user)
     return db_user
 
+# funkcja autentykująca użytkownika podczas logowania
 def autentykacja_uzytkownika(db: Session, dane_logowania: schemas.UzytkownikLogin):
     uzytkownik = db.query(models.Uzytkownik).filter(models.Uzytkownik.email == dane_logowania.email).first()
     
-    # Używamy naszej nowej funkcji weryfikującej
     if not uzytkownik or not zweryfikuj_haslo(dane_logowania.haslo, uzytkownik.haslo_hash):
         return False
     
@@ -49,49 +46,55 @@ def autentykacja_uzytkownika(db: Session, dane_logowania: schemas.UzytkownikLogi
         return False
         
     return uzytkownik
+
+# funkcja uruchamiająca nową sesję pracy
 def start_sesji(db: Session, user_id: int):
-    # Tworzymy nową sesję z aktualną godziną
     nowa_sesja = models.SesjaPracy(
         uzytkownik_id=user_id,
-        start_sesji=datetime.now()  # <--- Nowa nazwa kolumny
+        start_sesji=datetime.now()  
     )
     db.add(nowa_sesja)
     db.commit()
     db.refresh(nowa_sesja)
     return nowa_sesja
 
+# funkcja kończąca aktywną sesję pracy
 def stop_sesji(db: Session, user_id: int):
-    # Szukamy aktywnej sesji (gdzie koniec_sesji to None)
     sesja = db.query(models.SesjaPracy).filter(
         models.SesjaPracy.uzytkownik_id == user_id,
-        models.SesjaPracy.koniec_sesji == None  # <--- Nowa nazwa kolumny
+        models.SesjaPracy.koniec_sesji == None
     ).first()
     
     if sesja:
-        sesja.koniec_sesji = datetime.now()  # <--- Nowa nazwa kolumny
+        sesja.koniec_sesji = datetime.now()
         db.commit()
         db.refresh(sesja)
         return sesja
     return None
+
+# funkcja pobierająca wszystkich użytkowników z bazy
 def pobierz_wszystkich_uzytkownikow(db: Session):
     return db.query(models.Uzytkownik).all()
 
+# funkcja pobierająca sesje konkretnego użytkownika
 def pobierz_sesje_uzytkownika(db: Session, uzytkownik_id: int):
-    # Sortujemy od najnowszych (desc - descending), żeby ostatnie sesje były na górze
     return db.query(models.SesjaPracy).filter(
         models.SesjaPracy.uzytkownik_id == uzytkownik_id
     ).order_by(models.SesjaPracy.start_sesji.desc()).all()
 
+# funkcja pobierająca tylko użytkowników z rolą pracownika
 def pobierz_pracownikow(db: Session):
     return db.query(models.Uzytkownik).filter(
         models.Uzytkownik.rola == models.RolaUzytkownika.pracownik
     ).all()
 
+# funkcja pobierająca użytkownika na podstawie jego ID
 def pobierz_uzytkownika_po_id(db: Session, uzytkownik_id: int):
     return db.query(models.Uzytkownik).filter(
         models.Uzytkownik.id == uzytkownik_id
     ).first()
 
+# funkcja aktualizująca stawki finansowe i normy użytkownika
 def aktualizuj_ustawienia_placow(
     db: Session,
     uzytkownik_id: int,
@@ -107,12 +110,14 @@ def aktualizuj_ustawienia_placow(
     db.refresh(uzytkownik)
     return uzytkownik
 
+# funkcja obliczająca długość sesji w godzinach
 def _dlugosc_sesji_w_godzinach(sesja: models.SesjaPracy) -> Optional[float]:
     if sesja.koniec_sesji is None:
         return None
     roznica = sesja.koniec_sesji - sesja.start_sesji
     return roznica.total_seconds() / 3600
 
+# funkcja obliczająca czas pracy i zarobki w rozbiciu na dni
 def _oblicz_podsumowanie_dni(
     sesje: list,
     norma_godzinowa: Optional[int],
@@ -166,6 +171,7 @@ def _oblicz_podsumowanie_dni(
 
     return dni, round(pensja_laczna, 2)
 
+# funkcja agregująca dane dzienne do podsumowań miesięcznych
 def _oblicz_podsumowanie_miesiecy(dni: list) -> list:
     miesiace: dict[tuple[int, int], dict] = defaultdict(lambda: {
         "godziny_normalne": 0.0,
@@ -196,6 +202,7 @@ def _oblicz_podsumowanie_miesiecy(dni: list) -> list:
         })
     return wynik
 
+# funkcja obliczająca szczegółowe statystyki dni i pensji dla pracownika
 def oblicz_szczegoly_pracownika(db: Session, uzytkownik: models.Uzytkownik):
     sesje = pobierz_sesje_uzytkownika(db, uzytkownik.id)
     dni, pensja = _oblicz_podsumowanie_dni(
@@ -206,6 +213,7 @@ def oblicz_szczegoly_pracownika(db: Session, uzytkownik: models.Uzytkownik):
     )
     return dni, pensja
 
+# funkcja generująca pełne podsumowanie dniowe i miesięczne dla zalogowanego użytkownika
 def oblicz_moje_podsumowanie(db: Session, uzytkownik: models.Uzytkownik):
     sesje = pobierz_sesje_uzytkownika(db, uzytkownik.id)
     aktywna = next((s for s in sesje if s.koniec_sesji is None), None)
@@ -217,6 +225,8 @@ def oblicz_moje_podsumowanie(db: Session, uzytkownik: models.Uzytkownik):
     )
     miesiace = _oblicz_podsumowanie_miesiecy(dni)
     return dni, miesiace, aktywna
+
+# funkcja aktywująca lub dezaktywująca konto użytkownika
 def zmien_status_konta(db: Session, uzytkownik_id: int, aktywny: bool):
     uzytkownik = pobierz_uzytkownika_po_id(db, uzytkownik_id)
     if uzytkownik:
@@ -225,6 +235,7 @@ def zmien_status_konta(db: Session, uzytkownik_id: int, aktywny: bool):
         db.refresh(uzytkownik)
     return uzytkownik
 
+# funkcja umożliwiająca ręczne dodanie sesji pracy przez administratora
 def dodaj_sesje_recznie(db: Session, uzytkownik_id: int, sesja_dane: schemas.SesjaPracyManual):
     nowa_sesja = models.SesjaPracy(
         uzytkownik_id=uzytkownik_id,
@@ -236,6 +247,7 @@ def dodaj_sesje_recznie(db: Session, uzytkownik_id: int, sesja_dane: schemas.Ses
     db.refresh(nowa_sesja)
     return nowa_sesja
 
+# funkcja modyfikująca ramy czasowe istniejącej sesji pracy
 def edytuj_sesje(db: Session, sesja_id: int, sesja_dane: schemas.SesjaPracyManual):
     sesja = db.query(models.SesjaPracy).filter(models.SesjaPracy.id == sesja_id).first()
     if sesja:

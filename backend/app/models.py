@@ -27,7 +27,7 @@ class Uzytkownik(Base):
 
     sesje = relationship("SesjaPracy", back_populates="wlasciciel")
 
-# klasa modelu zdarzenia czasowego
+# klasa modelu sesji
 class SesjaPracy(Base):
     __tablename__ = "sesje_pracy"
 
@@ -36,6 +36,4 @@ class SesjaPracy(Base):
     koniec_sesji = Column(DateTime, nullable=True)
     
     uzytkownik_id = Column(Integer, ForeignKey("uzytkownicy.id"))
-
-    # Pamiętaj o zmianie back_populates w modelu Uzytkownik!
     wlasciciel = relationship("Uzytkownik", back_populates="sesje")

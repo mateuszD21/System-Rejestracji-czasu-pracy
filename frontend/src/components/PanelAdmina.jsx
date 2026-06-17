@@ -5,7 +5,6 @@ import Header from './Header';
 export default function PanelAdmina() {
     const [pracownicy, setPracownicy] = useState([]);
     
-    // --- STANY DLA DODAWANIA PRACOWNIKA ---
     const [pokazFormularz, setPokazFormularz] = useState(false);
     const [imie, setImie] = useState('');
     const [nazwisko, setNazwisko] = useState('');
@@ -13,7 +12,6 @@ export default function PanelAdmina() {
     const [haslo, setHaslo] = useState('');
     const [rola, setRola] = useState('pracownik');
 
-    // --- STANY DLA ZARZĄDZANIA CZASEM ---
     const [wybranyPracownik, setWybranyPracownik] = useState(null);
     const [sesjePracownika, setSesjePracownika] = useState([]);
     
@@ -22,6 +20,7 @@ export default function PanelAdmina() {
     const [startSesji, setStartSesji] = useState('');
     const [koniecSesji, setKoniecSesji] = useState('');
 
+    // funkcja pobierająca listę wszystkich pracowników z API
     const pobierzPracownikow = async () => {
         try {
             const response = await api.get('/admin/uzytkownicy');
@@ -30,27 +29,25 @@ export default function PanelAdmina() {
             console.error("Błąd pobierania pracowników", error);
         }
     };
-
+    
+    // hook wywołujący pobranie listy pracowników przy montowaniu komponentu
     useEffect(() => {
         pobierzPracownikow();
     }, []);
-
-    // --- POPRAWIONE FORMATOWANIE DAT (Rozwiązanie problemu stref czasowych) ---
-    // Python zwraca "YYYY-MM-DDTHH:mm:ss" (np. "2023-11-20T14:30:00").
-    // Input datetime-local potrzebuje "YYYY-MM-DDTHH:mm". Odcinamy więc tylko sekundy.
+// funkcja przycinająca pełny format daty do formatu akceptowanego przez input datetime-local
     const formatToDatetimeLocal = (dateString) => {
         if (!dateString) return '';
         return dateString.slice(0, 16); 
     };
 
-    // Formatuje datę tylko do wyświetlenia w lewej tabelce
+// funkcja formatująca datę i czas do czytelnej postaci tekstowej dla tabeli sesji
     const formatujDateWyswietlania = (dateString) => {
         if (!dateString) return 'Trwa (brak końca)';
         const [data, czas] = dateString.split('T');
         return `${data} ${czas.slice(0, 5)}`;
     };
 
-    // --- FUNKCJE API ---
+// funkcja obsługująca wysyłanie formularza w celu utworzenia nowego konta pracownika
     const handleDodajPracownika = async (e) => {
         e.preventDefault();
         try {
@@ -64,6 +61,7 @@ export default function PanelAdmina() {
         }
     };
 
+// funkcja zmieniająca status aktywności (blokowanie/odblokowanie) konta użytkownika
     const handleZmienStatus = async (id, obecnyStatus) => {
         try {
             await api.put(`/admin/uzytkownicy/${id}/status`, { aktywny: !obecnyStatus });
@@ -73,6 +71,7 @@ export default function PanelAdmina() {
         }
     };
 
+// funkcja otwierająca podpanel zarządzania sesjami czasu pracy dla wybranego pracownika
     const otworzZarzadzanieCzasem = async (pracownik) => {
         setWybranyPracownik(pracownik);
         setPokazFormularz(false); 
@@ -80,6 +79,7 @@ export default function PanelAdmina() {
         resetujFormularzSesji();
     };
 
+// funkcja pobierająca z API pełną historię sesji pracy konkretnego użytkownika
     const pobierzSesjePracownika = async (pracownikId) => {
         try {
             const response = await api.get(`/admin/uzytkownicy/${pracownikId}/sesje`);
@@ -89,6 +89,7 @@ export default function PanelAdmina() {
         }
     };
 
+// funkcja przywracająca formularz sesji do domyślnego trybu dodawania nowego wpisu
     const resetujFormularzSesji = () => {
         setTrybFormularzaSesji('dodaj');
         setIdSesjiDoEdycji('');
@@ -96,18 +97,17 @@ export default function PanelAdmina() {
         setKoniecSesji('');
     };
 
+// funkcja uzupełniająca formularz sesji danymi wybranego wpisu w celu jego modyfikacji
     const przygotujDoEdycji = (sesja) => {
         setTrybFormularzaSesji('edytuj');
         setIdSesjiDoEdycji(sesja.id);
         setStartSesji(formatToDatetimeLocal(sesja.start_sesji));
         setKoniecSesji(formatToDatetimeLocal(sesja.koniec_sesji));
     };
-
+// funkcja obsługująca zapis nowej sesji lub aktualizację istniejącego wpisu w bazie danych
     const handleZapiszSesje = async (e) => {
         e.preventDefault();
         
-        // Zamiast uzywać new Date().toISOString() które psuje strefę czasową, 
-        // po prostu wysyłamy string z inputa i doklejamy sekundy (:00).
         const payload = {
             start_sesji: startSesji + ":00",
             koniec_sesji: koniecSesji ? (koniecSesji + ":00") : null

@@ -29,8 +29,9 @@ app.add_middleware(
     allow_headers=["*"], # Zezwala na wszystkie nagłówki (w tym tokeny)
 )
 
-# Funkcja do sprawdzania, kto jest zalogowany
+# funkcja sprawdzająca i zwracająca aktualnie zalogowanego użytkownika
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Nie można zweryfikować uprawnień",
@@ -49,12 +50,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
     return user
 
+# funkcja weryfikująca czy zalogowany użytkownik posiada rolę kierownika lub administratora
 def wymagaj_kierownika(current_user: models.Uzytkownik = Depends(get_current_user)):
     if current_user.rola not in (models.RolaUzytkownika.kierownik, models.RolaUzytkownika.administrator):
         raise HTTPException(status_code=403, detail="Brak uprawnień kierownika")
     return current_user
 
-# --- LOGOWANIE (Generuje Token) ---
+# endpoint generujący token dostępowy JWT podczas logowania użytkownika
 @app.post("/token")
 def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), # Swagger używa formularza
@@ -74,27 +76,24 @@ def login_for_access_token(
     
     return {"access_token": encoded_jwt, "token_type": "bearer"}
 
-# --- DODAWANIE PRACOWNIKA (Tylko dla Admina) ---
+# endpoint umożliwiający administratorowi utworzenie nowego konta użytkownika
 @app.post("/admin/dodaj-pracownika", response_model=schemas.UzytkownikResponse)
 def dodaj_pracownika(
     user_data: schemas.UzytkownikCreate, 
     db: Session = Depends(database.get_db),
     current_admin: models.Uzytkownik = Depends(get_current_user)
 ):
-    # 1. Sprawdzamy, czy ten, kto klika, to na pewno administrator
     if current_admin.rola != "administrator":
         raise HTTPException(status_code=403, detail="Brak uprawnień administratora")
     
-    # 2. Przekazujemy CAŁY obiekt user_data do CRUDA, 
-    # a jako rolę podajemy to, co przyszło w formularzu
     return crud.utworz_uzytkownika(db=db, user=user_data)
 
+# endpoint uruchamiający nową sesję rejestracji czasu pracy pracownika
 @app.post("/czas/start", response_model=schemas.SesjaPracyResponse)
 def rozpocznij_prace(
     db: Session = Depends(database.get_db),
     current_user: models.Uzytkownik = Depends(get_current_user)
 ):
-    # Szukamy aktywnej sesji
     aktywna = db.query(models.SesjaPracy).filter(
         models.SesjaPracy.uzytkownik_id == current_user.id,
         models.SesjaPracy.koniec_sesji == None
@@ -105,6 +104,7 @@ def rozpocznij_prace(
         
     return crud.start_sesji(db, current_user.id) 
 
+# endpoint zatrzymujący trwającą sesję rejestracji czasu pracy pracownika
 @app.post("/czas/stop", response_model=schemas.SesjaPracyResponse)
 def zakoncz_prace(
     db: Session = Depends(database.get_db),
@@ -115,6 +115,7 @@ def zakoncz_prace(
         raise HTTPException(status_code=400, detail="Brak aktywnej sesji")
     return wynik
 
+# endpoint zwracający administratorowi listę wszystkich zarejestrowanych użytkowników
 @app.get("/admin/uzytkownicy", response_model=List[schemas.UzytkownikResponse])
 def get_wszyscy_uzytkownicy(
     db: Session = Depends(database.get_db),
@@ -124,6 +125,7 @@ def get_wszyscy_uzytkownicy(
         raise HTTPException(status_code=403, detail="Brak uprawnień administratora")
     return crud.pobierz_wszystkich_uzytkownikow(db)
 
+# endpoint zwracający zalogowanemu użytkownikowi historię jego własnych sesji pracy
 @app.get("/czas/moje-sesje", response_model=List[schemas.SesjaPracyResponse])
 def get_moje_sesje(
     db: Session = Depends(database.get_db),
@@ -131,6 +133,7 @@ def get_moje_sesje(
 ):
     return crud.pobierz_sesje_uzytkownika(db, uzytkownik_id=current_user.id)
 
+# endpoint generujący pełne, szczegółowe podsumowanie finansowo-godzinowe dla zalogowanego użytkownika
 @app.get("/czas/moje-podsumowanie", response_model=schemas.MojePodsumowanieResponse)
 def get_moje_podsumowanie(
     db: Session = Depends(database.get_db),
@@ -155,6 +158,7 @@ def get_moje_podsumowanie(
         ) for d in dni],
     )
 
+# endpoint pobierający kierownikowi listę podległych mu pracowników z podstawowymi danymi płacowymi
 @app.get("/kierownik/pracownicy", response_model=List[schemas.PracownikKierownikaResponse])
 def get_pracownicy_kierownika(
     db: Session = Depends(database.get_db),
@@ -174,6 +178,7 @@ def get_pracownicy_kierownika(
         ))
     return wynik
 
+# endpoint zwracający kierownikowi pełne podsumowanie dni pracy i zarobków konkretnego pracownika
 @app.get("/kierownik/pracownicy/{pracownik_id}", response_model=schemas.SzczegolyPracownikaResponse)
 def get_szczegoly_pracownika(
     pracownik_id: int,
@@ -203,6 +208,7 @@ def get_szczegoly_pracownika(
         ) for dzien in dni],
     )
 
+# endpoint umożliwiający kierownikowi aktualizację norm i stawek finansowych pracownika
 @app.put("/kierownik/pracownicy/{pracownik_id}/ustawienia", response_model=schemas.SzczegolyPracownikaResponse)
 def aktualizuj_ustawienia_pracownika(
     pracownik_id: int,
@@ -235,7 +241,7 @@ def aktualizuj_ustawienia_pracownika(
         ) for dzien in dni],
     )
 
-# 1. Zablokowanie/Odblokowanie konta pracownika
+# endpoint umożliwiający administratorowi aktywację lub blokowanie konta użytkownika
 @app.put("/admin/uzytkownicy/{uzytkownik_id}/status", response_model=schemas.UzytkownikResponse)
 def zmien_status_uzytkownika(
     uzytkownik_id: int, 
@@ -252,7 +258,7 @@ def zmien_status_uzytkownika(
     return zaktualizowany
 
 
-# 2. Ręczne dodanie brakującego wpisu z przeszłości
+# endpoint umożliwiający administratorowi ręczne dodanie pominiętej sesji pracy użytkownika
 @app.post("/admin/uzytkownicy/{uzytkownik_id}/sesje", response_model=schemas.SesjaPracyResponse)
 def dodaj_brakujaca_sesje(
     uzytkownik_id: int, 
@@ -266,7 +272,7 @@ def dodaj_brakujaca_sesje(
     return crud.dodaj_sesje_recznie(db, uzytkownik_id, sesja)
 
 
-# 3. Ręczna korekta (edycja) istniejącej sesji
+# endpoint umożliwiający administratorowi modyfikację (korektę) istniejącej sesji pracy
 @app.put("/admin/sesje/{sesja_id}", response_model=schemas.SesjaPracyResponse)
 def popraw_bledna_sesje(
     sesja_id: int, 
@@ -282,7 +288,7 @@ def popraw_bledna_sesje(
         raise HTTPException(status_code=404, detail="Nie znaleziono sesji")
     return zaktualizowana
 
-# Pobranie wszystkich sesji konkretnego pracownika przez admina
+# endpoint pobierający administratorowi historię sesji pracy konkretnego użytkownika
 @app.get("/admin/uzytkownicy/{uzytkownik_id}/sesje", response_model=List[schemas.SesjaPracyResponse])
 def get_sesje_pracownika_admin(
     uzytkownik_id: int,
@@ -294,6 +300,7 @@ def get_sesje_pracownika_admin(
         
     return crud.pobierz_sesje_uzytkownika(db, uzytkownik_id)
 
+# endpoint generujący kierownikowi miesięczny raport zbiorczy z podsumowaniem czasu pracy i płac wszystkich pracowników
 @app.get("/kierownik/raport-zbiorczy")
 def generuj_raport_zbiorczy(
     rok: int,
@@ -301,14 +308,14 @@ def generuj_raport_zbiorczy(
     db: Session = Depends(database.get_db),
     current_user: models.Uzytkownik = Depends(wymagaj_kierownika)
 ):
-    if current_user.rola not in ("kierownik", "administrator"): # Zabezpieczenie ról
+    if current_user.rola not in ("kierownik", "administrator"): 
         raise HTTPException(status_code=403, detail="Brak uprawnień kierownika")
 
     pracownicy = crud.pobierz_pracownikow(db)
     raport = []
     
     for pracownik in pracownicy:
-        # Pobieramy dni pracownika (Twoja funkcja wylicza je dla wszystkich sesji)
+        # Pobieramy dni pracownika
         dni, _ = crud.oblicz_szczegoly_pracownika(db, pracownik)
         
         # Filtrujemy tylko te dni, które należą do wybranego roku i miesiąca
@@ -323,8 +330,6 @@ def generuj_raport_zbiorczy(
         total_godziny = sum(d["godziny_przepracowane"] for d in dni_w_miesiacu)
         total_zarobek = sum(d["zarobek"] for d in dni_w_miesiacu)
         
-        # Jeśli pracownik w danym miesiącu w ogóle nie pracował, możemy go pominąć 
-        # lub wpisać z zerowym stanem (zostawiamy zero, żeby kierownik widział pełną listę płac)
         raport.append({
             "pracownik_id": pracownik.id,
             "imie": pracownik.imie,

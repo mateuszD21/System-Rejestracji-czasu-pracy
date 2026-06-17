@@ -18,7 +18,7 @@ export default function Login() {
             const token = response.data.access_token;
             localStorage.setItem('token', token);
             
-            // Sprawdzamy rolę, żeby wiedzieć, gdzie go przekierować
+            // Sprawdzamy rolę użytkownika z tokena i kierujemy do odpowiedniego panelu
             const payload = JSON.parse(atob(token.split('.')[1]));
             if (payload.rola === 'administrator') {
                 navigate('/admin');
